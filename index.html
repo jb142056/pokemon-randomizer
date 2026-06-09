@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>POKÉ // RANDOMIZER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1a1816;
+    --bg-2: #221f1b;
+    --panel: #2a2622;
+    --line: #3a342d;
+    --text: #ede4d3;
+    --dim: #8a8174;
+    --amber: #f5a623;
+    --amber-deep: #c97f12;
+    --amber-glow: rgba(245, 166, 35, 0.35);
+    --rust: #c45a2a;
+    --green: #7aa05a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scanline + grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.12) 2px,
+      rgba(0,0,0,0.12) 3px
+    );
+    z-index: 100;
+    opacity: 0.5;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%);
+    z-index: 99;
+  }
+
+  .app {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 36px 28px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px;
+    margin-bottom: 28px;
+  }
+  .logo {
+    font-family: 'Fraunces', serif;
+    font-weight: 900;
+    font-size: clamp(28px, 4.5vw, 44px);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .logo span {
+    color: var(--amber);
+    font-style: italic;
+  }
+  .meta {
+    font-size: 11px;
+    color: var(--dim);
+    text-align: right;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    line-height: 1.6;
+  }
+  .meta .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 6px;
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* MAIN GRID */
+  .grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 24px;
+  }
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  /* LEFT: image panel */
+  .panel-img {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    min-height: 480px;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-img::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(245,166,35,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(245,166,35,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+  }
+
+  .panel-label {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--dim);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+    z-index: 2;
+  }
+  .panel-label .id-tag {
+    color: var(--amber);
+    font-weight: 700;
+  }
+
+  .image-stage {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    margin: 12px 0;
+  }
+  .image-stage img {
+    width: 100%;
+    max-width: 360px;
+    height: auto;
+    filter: drop-shadow(0 0 40px var(--amber-glow))
+            drop-shadow(0 8px 16px rgba(0,0,0,0.5));
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s;
+    image-rendering: pixelated;
+  }
+  .image-stage.loading img {
+    opacity: 0.2;
+    transform: scale(0.9) rotate(-4deg);
+  }
+
+  .target-rings {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .target-rings .ring {
+    position: absolute;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+  }
+  .ring-1 { width: 320px; height: 320px; animation: spin 60s linear infinite; }
+  .ring-2 { width: 220px; height: 220px; animation: spin 40s linear infinite reverse; border-style: dotted; }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .stage-corners {
+    position: absolute;
+    inset: 18px;
+    pointer-events: none;
+  }
+  .stage-corners span {
+    position: absolute;
+    width: 16px; height: 16px;
+    border-color: var(--amber);
+    border-style: solid;
+    border-width: 0;
+  }
+  .stage-corners .tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; }
+  .stage-corners .tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; }
+  .stage-corners .bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; }
+  .stage-corners .br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; }
+
+  /* RIGHT: info panel */
+  .panel-info {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .pokemon-name {
+    font-family: 'Fraunces', serif;
+    font-weight: 900;
+    font-size: clamp(40px, 6vw, 64px);
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    text-transform: capitalize;
+  }
+  .pokemon-name .accent {
+    color: var(--amber);
+    font-style: italic;
+    font-weight: 600;
+  }
+  .pokemon-jp {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  .types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .type-chip {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--text);
+  }
+  .type-chip.primary {
+    background: var(--amber);
+    color: var(--bg);
+    border-color: var(--amber);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px 22px;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+  .stat-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .stat-max {
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .stat-bar {
+    height: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    overflow: hidden;
+    margin-top: 2px;
+  }
+  .stat-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--rust), var(--amber));
+    width: 0%;
+    transition: width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .meta-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 0;
+  }
+  .meta-row > div {
+    border-left: 1px solid var(--line);
+    padding-left: 14px;
+  }
+  .meta-row > div:first-child { border-left: none; padding-left: 0; }
+  .meta-row .k {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .meta-row .v {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  /* CTA */
+  .cta-zone {
+    margin-top: 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .catch-btn {
+    position: relative;
+    background: var(--amber);
+    color: var(--bg);
+    border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    padding: 22px 44px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+    box-shadow:
+      0 0 0 1px var(--amber),
+      0 0 24px var(--amber-glow),
+      6px 6px 0 var(--amber-deep);
+    overflow: hidden;
+  }
+  .catch-btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow:
+      0 0 0 1px var(--amber),
+      0 0 32px var(--amber-glow),
+      8px 8px 0 var(--amber-deep);
+  }
+  .catch-btn:active {
+    transform: translate(4px, 4px);
+    box-shadow:
+      0 0 0 1px var(--amber),
+      0 0 16px var(--amber-glow),
+      2px 2px 0 var(--amber-deep);
+  }
+  .catch-btn:disabled {
+    background: var(--line);
+    color: var(--dim);
+    box-shadow: none;
+    cursor: wait;
+    transform: none;
+  }
+  .catch-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transition: left 0.6s;
+  }
+  .catch-btn:hover::after { left: 100%; }
+
+  .hint {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  .hint kbd {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 2px 8px;
+    color: var(--amber);
+    border-radius: 2px;
+    font-family: inherit;
+    margin: 0 4px;
+  }
+
+  /* FOOTER ticker */
+  .ticker {
+    margin-top: 28px;
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .ticker .amber { color: var(--amber); }
+
+  /* Initial state */
+  .empty-state {
+    text-align: center;
+    color: var(--dim);
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    line-height: 2;
+  }
+  .empty-state .big {
+    display: block;
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 32px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    text-transform: none;
+    margin-bottom: 12px;
+  }
+
+  /* Fade in */
+  .fade-in {
+    animation: fadeUp 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">POKÉ<span>/randomizer</span></div>
+    <div class="meta">
+      <div><span class="dot"></span>PokéAPI · LIVE</div>
+      <div id="counter">SEEN · 000</div>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- LEFT -->
+    <div class="panel-img">
+      <div class="panel-label">
+        <span>// VISUAL FEED</span>
+        <span class="id-tag" id="id-tag">#0000</span>
+      </div>
+
+      <div class="image-stage" id="stage">
+        <div class="target-rings">
+          <div class="ring ring-1"></div>
+          <div class="ring ring-2"></div>
+        </div>
+        <img id="poke-img" src="" alt="" style="display:none;" />
+        <div class="empty-state" id="empty">
+          <span class="big">Press to catch.</span>
+          1025 種類のポケモンから<br>ランダムに 1 体を表示
+        </div>
+      </div>
+
+      <div class="stage-corners">
+        <span class="tl"></span><span class="tr"></span>
+        <span class="bl"></span><span class="br"></span>
+      </div>
+
+      <div class="panel-label">
+        <span id="status-text">// AWAITING INPUT</span>
+        <span id="timestamp">--:--:--</span>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="panel-info">
+      <div>
+        <div class="pokemon-name" id="poke-name">
+          <span class="accent">unknown</span><br>specimen
+        </div>
+        <div class="pokemon-jp" id="poke-jp">SPECIES UNIDENTIFIED</div>
+      </div>
+
+      <div class="types" id="types"></div>
+
+      <div class="meta-row">
+        <div>
+          <div class="k">Height</div>
+          <div class="v" id="m-height">—</div>
+        </div>
+        <div>
+          <div class="k">Weight</div>
+          <div class="v" id="m-weight">—</div>
+        </div>
+        <div>
+          <div class="k">Base XP</div>
+          <div class="v" id="m-xp">—</div>
+        </div>
+      </div>
+
+      <div class="stats-grid" id="stats"></div>
+    </div>
+  </div>
+
+  <div class="cta-zone">
+    <button class="catch-btn" id="catch-btn">▸ Catch a Pokémon</button>
+    <div class="hint">or press <kbd>SPACE</kbd></div>
+  </div>
+
+  <div class="ticker">
+    <span>SYS · <span class="amber">RNG-1025</span> · GEN I–IX</span>
+    <span>SRC · pokeapi.co/api/v2</span>
+    <span>v1.0.0</span>
+  </div>
+
+</div>
+
+<script>
+  const MAX_POKEMON = 1025;
+  const STAT_LABELS = {
+    'hp': 'HP',
+    'attack': 'ATK',
+    'defense': 'DEF',
+    'special-attack': 'SP.ATK',
+    'special-defense': 'SP.DEF',
+    'speed': 'SPD'
+  };
+
+  const els = {
+    btn: document.getElementById('catch-btn'),
+    stage: document.getElementById('stage'),
+    img: document.getElementById('poke-img'),
+    empty: document.getElementById('empty'),
+    idTag: document.getElementById('id-tag'),
+    name: document.getElementById('poke-name'),
+    jp: document.getElementById('poke-jp'),
+    types: document.getElementById('types'),
+    height: document.getElementById('m-height'),
+    weight: document.getElementById('m-weight'),
+    xp: document.getElementById('m-xp'),
+    stats: document.getElementById('stats'),
+    status: document.getElementById('status-text'),
+    ts: document.getElementById('timestamp'),
+    counter: document.getElementById('counter')
+  };
+
+  let seen = 0;
+
+  function updateTimestamp() {
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    els.ts.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  setInterval(updateTimestamp, 1000);
+  updateTimestamp();
+
+  async function fetchPokemon() {
+    els.btn.disabled = true;
+    els.status.textContent = '// SCANNING...';
+    els.stage.classList.add('loading');
+    els.empty.style.display = 'none';
+
+    try {
+      const id = Math.floor(Math.random() * MAX_POKEMON) + 1;
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      if (!res.ok) throw new Error('Fetch failed');
+      const data = await res.json();
+
+      // Species for Japanese name
+      let jpName = data.name.toUpperCase();
+      try {
+        const sres = await fetch(data.species.url);
+        if (sres.ok) {
+          const sdata = await sres.json();
+          const jp = sdata.names.find(n => n.language.name === 'ja-Hrkt' || n.language.name === 'ja');
+          if (jp) jpName = jp.name;
+        }
+      } catch (_) {}
+
+      render(data, jpName);
+      seen++;
+      els.counter.textContent = `SEEN · ${String(seen).padStart(3, '0')}`;
+      els.status.textContent = '// LOCK ACQUIRED';
+    } catch (err) {
+      els.status.textContent = '// ERROR · RETRY';
+      console.error(err);
+    } finally {
+      els.btn.disabled = false;
+      els.stage.classList.remove('loading');
+    }
+  }
+
+  function render(p, jpName) {
+    // Image
+    const sprite =
+      p.sprites.other?.['official-artwork']?.front_default ||
+      p.sprites.other?.home?.front_default ||
+      p.sprites.front_default;
+    els.img.src = sprite;
+    els.img.alt = p.name;
+    els.img.style.display = 'block';
+    els.img.classList.remove('fade-in');
+    void els.img.offsetWidth;
+    els.img.classList.add('fade-in');
+
+    // ID
+    els.idTag.textContent = `#${String(p.id).padStart(4, '0')}`;
+
+    // Name
+    const name = p.name.replace(/-/g, ' ');
+    const parts = name.split(' ');
+    els.name.innerHTML = parts.length > 1
+      ? `<span class="accent">${parts[0]}</span><br>${parts.slice(1).join(' ')}`
+      : `<span class="accent">${name}</span>`;
+    els.jp.textContent = jpName;
+
+    // Types
+    els.types.innerHTML = '';
+    p.types.forEach((t, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'type-chip' + (i === 0 ? ' primary' : '');
+      chip.textContent = t.type.name;
+      els.types.appendChild(chip);
+    });
+
+    // Meta
+    els.height.textContent = (p.height / 10).toFixed(1) + ' m';
+    els.weight.textContent = (p.weight / 10).toFixed(1) + ' kg';
+    els.xp.textContent = p.base_experience ?? '—';
+
+    // Stats
+    els.stats.innerHTML = '';
+    p.stats.forEach(s => {
+      const label = STAT_LABELS[s.stat.name] || s.stat.name.toUpperCase();
+      const value = s.base_stat;
+      const pct = Math.min(100, (value / 255) * 100);
+
+      const wrap = document.createElement('div');
+      wrap.className = 'stat fade-in';
+      wrap.innerHTML = `
+        <div class="stat-label">${label}</div>
+        <div class="stat-row">
+          <span class="stat-value">${value}</span>
+          <span class="stat-max">/ 255</span>
+        </div>
+        <div class="stat-bar"><div class="stat-bar-fill"></div></div>
+      `;
+      els.stats.appendChild(wrap);
+      requestAnimationFrame(() => {
+        wrap.querySelector('.stat-bar-fill').style.width = pct + '%';
+      });
+    });
+  }
+
+  els.btn.addEventListener('click', fetchPokemon);
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !els.btn.disabled) {
+      e.preventDefault();
+      fetchPokemon();
+    }
+  });
+</script>
+</body>
+</html>
